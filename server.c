@@ -68,35 +68,37 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    int new_request = accept(socket_descriptor, NULL, NULL);
+    while (1){
 
-    if (new_request == -1){
-        perror("accept");
-        return 1;
-    }
+        int new_request = accept(socket_descriptor, NULL, NULL);
 
-    size_t recv_len = sizeof(buffer);
-    if (recvall(new_request, buffer, &recv_len) == -1) {
+        if (new_request == -1){
+            perror("accept");
+            continue;
+        }
+
+        size_t recv_len = sizeof(buffer);
+
+        if (recvall(new_request, buffer, &recv_len) == -1) {
+            fprintf(stderr, "incomplete request: got %zu bytes\n", recv_len);
+            close(new_request);
+            continue;
+        } 
         
-        fprintf(stderr, "incomplete request: got %zu bytes\n", recv_len);
-        close(new_request);
-        close(socket_descriptor);
-        return 1;
-    } 
-    
-    // calculations
-    uint64_t answer = htobe64(1);
+        // calculations
+        uint64_t answer = htobe64(1);
 
-    size_t send_len = sizeof(answer);
-    if (sendall(new_request, (const uint8_t *)&answer, &send_len) == -1) {
+        size_t send_len = sizeof(answer);
+        if (sendall(new_request, (const uint8_t *)&answer, &send_len) == -1) {
+            fprintf(stderr, "incomplete send: sent %zu bytes\n", send_len);
+            close(new_request);
+            continue;
+        }
 
-        fprintf(stderr, "incomplete send: send %zu bytes\n", recv_len);
         close(new_request);
-        close(socket_descriptor);
-        return 1;
     }
 
-    close(new_request);
+    
     close(socket_descriptor);
     
     return 0;
@@ -132,7 +134,7 @@ int sendall(int socket, const uint8_t *buf, size_t *len) {
 
     while(total < *len) {
 
-        n = send(socket, buf+total, bytesleft, 0);
+        n = send(socket, buf+total, bytesleft, MSG_NOSIGNAL);
         if (n == -1) { 
             break; 
         }
