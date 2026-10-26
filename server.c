@@ -7,19 +7,22 @@
 #include <netinet/in.h>
 #include <stdint.h>
 #include "messages.h"
-#include "lonesha256.h"
-
+#include <stdbool.h>
 
 #define LONESHA256_STATIC
+#include "lonesha256.h"
+
 #define BACKLOG 20
 
 int recvall(int socket, uint8_t *buf, size_t *len); 
 int sendall(int socket, const uint8_t *buf, size_t *len);
 int lonesha256(unsigned char out[32], const unsigned char *in, size_t len);
+bool reverse_hash(const uint8_t *buf, uint64_t start, uint64_t end, uint64_t *answer);
+
 
 int main(int argc, char *argv[]) {
 
-    uint8_t buffer[PACKET_REQUEST_SIZE];
+    uint8_t buffer[PACKET_REQUEST_SIZE] = {0};
 
     // command line part
     if (argc != 2) {
@@ -27,9 +30,9 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    char *end;
-    long port = strtol(argv[1], &end, 10);   // function that converts a string to a long integer, interpreting the string according to the specified base
-    if (*end != '\0' || port < 1 || port > 65535) {
+    char *end_arg;
+    long port = strtol(argv[1], &end_arg, 10);   // function that converts a string to a long integer, interpreting the string according to the specified base
+    if (*end_arg != '\0' || port < 1 || port > 65535) {
         fprintf(stderr, "invalid port: %s\n", argv[1]);
         return 1;
     }
@@ -84,9 +87,24 @@ int main(int argc, char *argv[]) {
             close(new_request);
             continue;
         } 
+
+        uint64_t start, end;
+        memcpy(&start, buffer + PACKET_REQUEST_START_OFFSET, sizeof start);
+        memcpy(&end,   buffer + PACKET_REQUEST_END_OFFSET,   sizeof end);
+        start = be64toh(start);
+        end   = be64toh(end);
+        
         
         // calculations
-        uint64_t answer = htobe64(1);
+        uint64_t answer;
+
+        if (!reverse_hash(buffer, start, end, &answer)) {
+            fprintf(stderr, "no match found\n");
+            close(new_request);
+            continue;
+        }
+
+        answer = htobe64(answer);
 
         size_t send_len = sizeof(answer);
         if (sendall(new_request, (const uint8_t *)&answer, &send_len) == -1) {
@@ -146,4 +164,18 @@ int sendall(int socket, const uint8_t *buf, size_t *len) {
     *len = total; // return number actually sent here
 
     return n == -1 ? -1 : 0;
+}
+
+bool reverse_hash(const uint8_t *buf, uint64_t start, uint64_t end, uint64_t *answer) {
+    for (uint64_t x = start; x < end; x++) {
+        uint64_t le = htole64(x);
+        uint8_t hash[SHA256_DIGEST_LENGTH];
+        lonesha256(hash, (const unsigned char *)&le, sizeof le);
+
+        if (memcmp(buf + PACKET_REQUEST_HASH_OFFSET, hash, SHA256_DIGEST_LENGTH) == 0) {
+            *answer = x;
+            return true;
+        }
+    }
+    return false;
 }
