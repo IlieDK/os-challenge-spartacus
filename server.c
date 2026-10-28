@@ -16,7 +16,6 @@
 
 int recvall(int socket, uint8_t *buf, size_t *len); 
 int sendall(int socket, const uint8_t *buf, size_t *len);
-int lonesha256(unsigned char out[32], const unsigned char *in, size_t len);
 bool reverse_hash(const uint8_t *buf, uint64_t start, uint64_t end, uint64_t *answer);
 
 
@@ -71,14 +70,25 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    while (1){
+    int temp_placeholder[100] = {0};
 
-        int new_request = accept(socket_descriptor, NULL, NULL);
+    size_t count = 0;
+                                        
+    while (count < sizeof temp_placeholder / sizeof temp_placeholder[0]) {
 
-        if (new_request == -1){
+        int request = accept(socket_descriptor, NULL, NULL);
+
+        if (request == -1) {
             perror("accept");
-            continue;
+            continue;                                    // count unchanged: slot stays free
         }
+
+        temp_placeholder[count++] = request;             // store, then advance
+    }
+
+    for (size_t index = 0; index < count; index++) {
+    
+        int new_request = temp_placeholder[index];
 
         size_t recv_len = sizeof(buffer);
 
