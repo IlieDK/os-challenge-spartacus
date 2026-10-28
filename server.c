@@ -16,7 +16,6 @@
 
 int recvall(int socket, uint8_t *buf, size_t *len); 
 int sendall(int socket, const uint8_t *buf, size_t *len);
-int lonesha256(unsigned char out[32], const unsigned char *in, size_t len);
 bool reverse_hash(const uint8_t *buf, uint64_t start, uint64_t end, uint64_t *answer);
 
 
